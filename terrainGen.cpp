@@ -233,7 +233,7 @@ static inline void generateNoise(double *buffer, double chunkX, double chunkY, d
     memset(buffer,0,sizeof(double)*sizeX * sizeZ*sizeY);
     double octavesFactor = 1.0;
     for (int octave = 0; octave < nbOctaves; octave++) {
-        // we care only about 315 332 400 417 316 333 401 and 418
+        // optimized if 0
         if (type==0) generatePermutations(&buffer, chunkX, chunkY, chunkZ, sizeX, sizeY, sizeZ, offsetX * octavesFactor, offsetY * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
         else generateNormalPermutations(&buffer, chunkX, chunkY, chunkZ, sizeX, sizeY, sizeZ, offsetX * octavesFactor, offsetY * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
 
@@ -390,9 +390,9 @@ static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache,
                     double stoneLimit = secondNoise_0_0; // aka thirdNoise
                     double stepThirdNoise_0_1 = (secondNoise_0_1 - secondNoise_0_0) * interpThirdOctave;
                     for (int zOffset = 0; zOffset < 4; zOffset++) {
-                        int block = 0;
+                        int block = AIR;
                         if (stoneLimit > 0.0) { //3d perlin condition
-                            block = 1;
+                            block = STONE;
                         }
                         (*chunkCache)[index] = block;
                         index += 128;
@@ -550,7 +550,7 @@ uint8_t *TerrainHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, Biom
         for (int z = 12; z < 16; ++z) {
             int pos = 128 * x * 16 + 128 * z;
             int y;
-            for (y = 80; y >= 70 && chunkCache[pos + y] == 0; y--);
+            for (y = 80; y >= 70 && chunkCache[pos + y] == AIR; y--);
             chunkHeights[x * 4 + (z-12)] = (y + 1);
         }
     }
