@@ -162,7 +162,7 @@ static inline BiomeResult *getBiomes(int posX, int posZ, int sizeX, int sizeZ, B
 void delete_biome_result(BiomeResult *biomeResult) {
     delete[] biomeResult->biomes;
     delete[] biomeResult->temperature;
-    delete[] biomeResult->humidity;
+    delete [] biomeResult->humidity;
     delete biomeResult;
 }
 
