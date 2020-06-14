@@ -1,5 +1,6 @@
 #include <iostream>
 #include <chrono>
+#include <cstring>
 #include "biomeGen.h"
 #include "terrainGen.h"
 
@@ -155,32 +156,34 @@ static inline void generateFixedPermutations(double **buffer, double x, double z
             double x1 = lerp(fadeX, grad2D(permutations[hashXZ], xCoord, zCoord), grad2D(permutations[hashOffXZ], xCoord - 1.0, zCoord));
             double x2 = lerp(fadeX, grad2D(permutations[hashXZ + 1], xCoord, zCoord - 1.0), grad2D(permutations[hashOffXZ + 1], xCoord - 1.0, zCoord - 1.0));
             double y1 = lerp(fadeZ, x1, x2);
-            (*buffer)[index++] = (*buffer)[index++] + y1 * octaveWidth;
+            (*buffer)[index] = (*buffer)[index] + y1 * octaveWidth;
+            index++;
         }
     }
 }
 
-static inline void generateNoise(double *buffer, double x, double y, double z, int sizeX, int sizeY, int sizeZ, double offsetX, double offsetY, double offsetZ, PermutationTable *permutationTable, int nbOctaves) {
-
+static inline void generateNoise(double *buffer, double chunkX, double chunkY, double chunkZ, int sizeX, int sizeY, int sizeZ, double offsetX, double offsetY, double offsetZ, PermutationTable *permutationTable, int nbOctaves) {
+    memset(buffer,0,sizeof(double)*sizeX * sizeZ*sizeY);
     double octavesFactor = 1.0;
     // we care only about 315 332 400 417 316 333 401 and 418
     for (int octave = 0; octave < nbOctaves; octave++) {
-        generatePermutations(&buffer, x, y, z, sizeX, sizeY, sizeZ, offsetX * octavesFactor, offsetY * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
+        generatePermutations(&buffer, chunkX, chunkY, chunkZ, sizeX, sizeY, sizeZ, offsetX * octavesFactor, offsetY * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
         octavesFactor /= 2.0;
     }
 }
 
-static inline void generateFixedNoise(double *buffer, double x, double z, int sizeX, int sizeZ, double offsetX, double offsetZ, PermutationTable *permutationTable, int nbOctaves) {
-
+static inline void generateFixedNoise(double *buffer, double chunkX, double chunkZ, int sizeX, int sizeZ, double offsetX, double offsetZ, PermutationTable *permutationTable, int nbOctaves) {
+    memset(buffer,0,sizeof(double)*sizeX * sizeZ);
     double octavesFactor = 1.0;
     for (int octave = 0; octave < nbOctaves; octave++) {
-        generateFixedPermutations(&buffer, x, z, sizeX, sizeZ, offsetX * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
+        generateFixedPermutations(&buffer, chunkX, chunkZ, sizeX, sizeZ, offsetX * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
         octavesFactor /= 2.0;
     }
 }
 
 
-static inline void fillNoiseColumn(double **NoiseColumn, int x, int z, const double *temperature, const double *humidity, TerrainNoises terrainNoises) {
+static inline void fillNoiseColumn(double **NoiseColumn, int chunkX, int chunkZ, const double *temperature, const double *humidity, TerrainNoises terrainNoises) {
+
     // we only need
     // (60, 77, 145, 162, 61, 78, 146, 163)
     // (145, 162, 230, 247, 146, 163, 231, 248)
@@ -195,15 +198,15 @@ static inline void fillNoiseColumn(double **NoiseColumn, int x, int z, const dou
     // this is super fast (but we only care about 3,4,8,9,13,14,18,19,23,24)
     auto *surfaceNoise = new double[5 * 5];
     auto *depthNoise = new double[5 * 5];
-    generateFixedNoise(surfaceNoise, x, z, 5, 5, 1.121, 1.121, terrainNoises.scale, 10);
-    generateFixedNoise(depthNoise, x, z, 5, 5, 200.0, 200.0, terrainNoises.depth, 16);
+    generateFixedNoise(surfaceNoise, chunkX, chunkZ, 5, 5, 1.121, 1.121, terrainNoises.scale, 10);
+    generateFixedNoise(depthNoise, chunkX, chunkZ, 5, 5, 200.0, 200.0, terrainNoises.depth, 16);
 
     auto *mainLimitPerlinNoise = new double[5 * 17 * 5];
     auto *minLimitPerlinNoise = new double[5 * 17 * 5];
     auto *maxLimitPerlinNoise = new double[5 * 17 * 5];
-    generateNoise(mainLimitPerlinNoise, x, 0, z, 5, 17, 5, d / 80, d1 / 160, d / 80, terrainNoises.mainLimit, 8);
-    generateNoise(minLimitPerlinNoise, x, 0, z, 5, 17, 5, d, d1, d, terrainNoises.minLimit, 16);
-    generateNoise(maxLimitPerlinNoise, x, 0, z, 5, 17, 5, d, d1, d, terrainNoises.maxLimit, 16);
+    generateNoise(mainLimitPerlinNoise, chunkX, 0, chunkZ, 5, 17, 5, d / 80, d1 / 160, d / 80, terrainNoises.mainLimit, 8);
+    generateNoise(minLimitPerlinNoise, chunkX, 0, chunkZ, 5, 17, 5, d, d1, d, terrainNoises.minLimit, 16);
+    generateNoise(maxLimitPerlinNoise, chunkX, 0, chunkZ, 5, 17, 5, d, d1, d, terrainNoises.maxLimit, 16);
     int possibleCellCounter[10] = {3, 4, 8, 9, 13, 14, 18, 19, 23, 24};
     for (int cellCounter : possibleCellCounter) {
         int X = (cellCounter / 5) * 3 + 1; // 1 4 7 10 13
@@ -264,6 +267,11 @@ static inline void fillNoiseColumn(double **NoiseColumn, int x, int z, const dou
         }
 
     }
+    delete[] surfaceNoise;
+    delete[] depthNoise;
+    delete[] mainLimitPerlinNoise;
+    delete[] minLimitPerlinNoise;
+    delete[] maxLimitPerlinNoise;
 }
 
 static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache, double *temperatures, double *humidity, TerrainNoises terrainNoises) {
@@ -275,6 +283,7 @@ static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache,
     double interpThirdOctave = 0.25;
     // we only need 315 332 400 417 316 333 401 and 418
     auto *NoiseColumn = new double[5 * 5 * 17];
+    memset(NoiseColumn, 0, sizeof(double ) * 5 * 5 * 17);
     fillNoiseColumn(&NoiseColumn, chunkX * quadrant, chunkZ * quadrant, temperatures, humidity, terrainNoises);
     for (uint8_t x = 0; x < quadrant; x++) {
         uint8_t z = 3;
@@ -458,35 +467,37 @@ uint8_t *TerrainInternalWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chun
 }
 
 
-
 TerrainResult *TerrainWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
     BiomeResult *biomeResult = BiomeWrapper(worldSeed, chunkX, chunkZ);
-    auto* chunkCache=TerrainInternalWrapper(worldSeed, chunkX, chunkZ, biomeResult);
+    auto *chunkCache = TerrainInternalWrapper(worldSeed, chunkX, chunkZ, biomeResult);
     auto *chunkHeights = new uint8_t[4 * 16];
-    for (int x = 12; x < 16; ++x) {
-        for (int z = 0; z < 16; ++z) {
+    for (int x = 0; x < 16; ++x) {
+        for (int z = 12; z < 16; ++z) {
             int pos = 128 * x * 16 + 128 * z;
             int y;
-            for (y = 80; y >= 70 && chunkCache[pos + y] == 0; y--) ;
-            chunkHeights[(x-12)*16+z]=(y+1);
+            for (y = 80; y >= 70 && chunkCache[pos + y] == 0; y--);
+            //std::cout<<(y + 1)<<" ";
+            chunkHeights[x * 4 + (z-12)] = (y + 1);
         }
+        //std::cout<<std::endl;
     }
-    auto* terrainResult=new TerrainResult;
-    terrainResult->biomeResult=biomeResult;
-    terrainResult->chunkHeights=chunkHeights;
-    terrainResult->chunkCache=chunkCache;
+    auto *terrainResult = new TerrainResult;
+    terrainResult->biomeResult = biomeResult;
+    terrainResult->chunkHeights = chunkHeights;
+    terrainResult->chunkCache = chunkCache;
     return terrainResult;
 }
-static void printHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ){
-    auto* terrainResult=TerrainWrapper(worldSeed,chunkX,chunkZ);
-    for (int x = 0; x < 4; ++x) {
-        for (int z = 0; z < 16; ++z) {
-            std::cout<<(int)terrainResult->chunkHeights[x*16+z]<<" ";
+
+static void printHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
+    auto *terrainResult = TerrainWrapper(worldSeed, chunkX, chunkZ);
+    for (int x = 0; x < 16; ++x) {
+        for (int z = 0; z < 4; ++z) {
+            std::cout << (int) terrainResult->chunkHeights[x * 4 + z] << " ";
         }
-        std::cout<<std::endl;
+        std::cout << std::endl;
     }
 }
 
 int main() {
-    printHeights(1000,15,15);
+    printHeights(10, 0, -3);
 }

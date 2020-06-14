@@ -1,5 +1,6 @@
 #include <iostream>
 #include <chrono>
+#include <cstring>
 #include "biomeGen.h"
 
 static_assert(std::numeric_limits<double>::is_iec559, "This code requires IEEE-754 doubles");
@@ -83,17 +84,16 @@ static inline void simplexNoise(double **buffer, double chunkX, double chunkZ, i
 }
 
 
-static inline void getFixedNoise(double *buffer, double chunkX, double chunkZ, int x, int z, double offsetX, double offsetZ, double ampFactor, PermutationTable *permutationTable, uint8_t octaves) {
+static inline void getFixedNoise(double *buffer, double chunkX, double chunkZ, int sizeX, int sizeZ, double offsetX, double offsetZ, double ampFactor, PermutationTable *permutationTable, uint8_t octaves) {
     offsetX /= 1.5;
     offsetZ /= 1.5;
-    // cache should be handled by the caller
-    for (int i = 0; i < x * z; ++i) {
-        buffer[i] = 0.0;
-    }
+    // cache should be created by the caller
+    memset(buffer,0,sizeof(double)*sizeX * sizeZ);
+
     double octaveDiminution = 1.0;
     double octaveAmplification = 1.0;
     for (uint8_t j = 0; j < octaves; ++j) {
-        simplexNoise(&buffer, chunkX, chunkZ, x, z, offsetX * octaveAmplification, offsetZ * octaveAmplification, 0.55000000000000004 / octaveDiminution, permutationTable[j]);
+        simplexNoise(&buffer, chunkX, chunkZ, sizeX, sizeZ, offsetX * octaveAmplification, offsetZ * octaveAmplification, 0.55000000000000004 / octaveDiminution, permutationTable[j]);
         octaveAmplification *= ampFactor;
         octaveDiminution *= 0.5;
     }
