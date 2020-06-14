@@ -48,12 +48,8 @@ static inline double grad(uint8_t hash, double x, double y, double z) {
             return 0; // never happens
     }
 }
-
-static inline double grad2D(uint8_t hash, double x, double z) {
-    uint8_t j = hash & 0xfu;
-    double d2 = (double) (1 - ((j & 8u) >> 3u)) * x;
-    double d3 = j >= 4 ? j != 12 && j != 14 ? z : x : 0.0;
-    return ((j & 1u) != 0 ? -d2 : d2) + ((j & 2u) != 0 ? -d3 : d3);
+static inline double grad2D(uint8_t hash,double x,double z){
+    return grad(hash,x,0,z);
 }
 
 //we care only about 60-61, 77-78, 145-146, 162-163, 230-231, 247-248, 315-316, 332-333, 400-401, 417-418
