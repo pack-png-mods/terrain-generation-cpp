@@ -118,7 +118,9 @@ static inline BiomeNoises *initBiomeGen(uint64_t worldSeed) {
 }
 
 
-static inline Biomes *getBiomes(Biomes *biomes, int posX, int posZ, int sizeX, int sizeZ, BiomeNoises *biomesOctaves) {
+static inline BiomeResult *getBiomes(int posX, int posZ, int sizeX, int sizeZ, BiomeNoises *biomesOctaves) {
+    auto *biomes = new Biomes[16 * 16];
+    auto *biomeResult = new BiomeResult;
     auto *temperature = new double[sizeX * sizeZ];
     auto *humidity = new double[sizeX * sizeZ];
     auto *precipitation = new double[sizeX * sizeZ];
@@ -150,22 +152,35 @@ static inline Biomes *getBiomes(Biomes *biomes, int posX, int posZ, int sizeX, i
             index++;
         }
     }
+    delete[] precipitation;
+    biomeResult->biomes = biomes;
+    biomeResult->temperature = temperature;
+    biomeResult->humidity = humidity;
+    return biomeResult;
+}
+
+void delete_biome_result(BiomeResult *biomeResult) {
+    delete[] biomeResult->biomes;
+    delete[] biomeResult->temperature;
+    delete[] biomeResult->humidity;
+    delete biomeResult;
+}
+
+BiomeResult *BiomeWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
+    BiomeNoises *biomesOctaves = initBiomeGen(worldSeed);
+    auto * biomes=getBiomes(chunkX * 16, chunkZ * 16, 16, 16, biomesOctaves);
+    delete [] biomesOctaves;
     return biomes;
 }
 
-static Biomes *BiomeWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
-    BiomeNoises *biomesOctaves = initBiomeGen(worldSeed);
-    return getBiomes(new Biomes[16 * 16], chunkX * 16, chunkZ * 16, 16, 16, biomesOctaves);
-}
-
 static inline void printBiomes(int64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
-    Biomes *biomes = BiomeWrapper(worldSeed, chunkX, chunkZ);
+    Biomes *biomes = BiomeWrapper(worldSeed, chunkX, chunkZ)->biomes;
     for (int i = 0; i < 16 * 16; ++i) {
         std::cout << biomesNames[biomes[i]] << " ";
     }
     std::cout << std::endl;
 }
-
+/*
 int main() {
     Random random = get_random(123456u);
     auto start = std::chrono::high_resolution_clock::now();
@@ -179,3 +194,4 @@ int main() {
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(finish - start).count() / 1e9 << " s\n";
 
 }
+*/

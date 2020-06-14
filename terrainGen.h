@@ -22,4 +22,14 @@ enum blocks{
     GRAVEL,
     ICE,
 };
+
+struct TerrainResult{
+    BiomeResult*biomeResult;
+    uint8_t *chunkCache;
+    uint8_t *chunkHeights;
+};
+
+void delete_terrain_result(TerrainResult *terrainResult);
+uint8_t *TerrainInternalWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, BiomeResult *biomeResult);
+TerrainResult *TerrainWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ);
 #endif //TERRAINGENCPP_TERRAINGEN_H

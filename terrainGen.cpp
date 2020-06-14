@@ -9,7 +9,7 @@ static inline double lerp(double x, double a, double b) {
     return a + x * (b - a);
 }
 
-static inline double grad(uint32_t hash, double x, double y, double z) {
+static inline double grad(uint8_t hash, double x, double y, double z) {
     switch (hash & 0xFu) {
         case 0x0:
             return x + y;
@@ -46,6 +46,13 @@ static inline double grad(uint32_t hash, double x, double y, double z) {
         default:
             return 0; // never happens
     }
+}
+
+static inline double grad2D(uint8_t hash, double x, double z) {
+    uint8_t j = hash & 0xfu;
+    double d2 = (double) (1 - ((j & 8u) >> 3u)) * x;
+    double d3 = j >= 4 ? j != 12 && j != 14 ? z : x : 0.0;
+    return ((j & 1u) != 0 ? -d2 : d2) + ((j & 2u) != 0 ? -d3 : d3);
 }
 
 //we care only about 60-61, 77-78, 145-146, 162-163, 230-231, 247-248, 315-316, 332-333, 400-401, 417-418
@@ -121,6 +128,38 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
     }
 }
 
+static inline void generateFixedPermutations(double **buffer, double x, double z, int sizeX, int sizeZ, double noiseFactorX, double noiseFactorZ, double octaveSize, PermutationTable permutationTable) {
+    int index = 0;
+    uint8_t *permutations = permutationTable.permutations;
+    double octaveWidth = 1.0 / octaveSize;
+    for (int X = 0; X < sizeX; X++) {
+        double xCoord = (x + (double) X) * noiseFactorX + permutationTable.xo;
+        int clampedXCoord = (int) xCoord;
+        if (xCoord < (double) clampedXCoord) {
+            clampedXCoord--;
+        }
+        auto xBottoms = (int32_t) ((uint32_t) clampedXCoord & 0xffu);
+        xCoord -= clampedXCoord;
+        double fadeX = xCoord * xCoord * xCoord * (xCoord * (xCoord * 6.0 - 15.0) + 10.0);
+        for (int Z = 0; Z < sizeZ; Z++) {
+            double zCoord = (z + (double) Z) * noiseFactorZ + permutationTable.zo;
+            int clampedZCoord = (int) zCoord;
+            if (zCoord < (double) clampedZCoord) {
+                clampedZCoord--;
+            }
+            auto zBottoms = (int32_t) ((uint32_t) clampedZCoord & 0xffu);
+            zCoord -= clampedZCoord;
+            double fadeZ = zCoord * zCoord * zCoord * (zCoord * (zCoord * 6.0 - 15.0) + 10.0);
+            int hashXZ = permutations[permutations[xBottoms]] + zBottoms;
+            int hashOffXZ = permutations[permutations[xBottoms + 1]] + zBottoms;
+            double x1 = lerp(fadeX, grad2D(permutations[hashXZ], xCoord, zCoord), grad2D(permutations[hashOffXZ], xCoord - 1.0, zCoord));
+            double x2 = lerp(fadeX, grad2D(permutations[hashXZ + 1], xCoord, zCoord - 1.0), grad2D(permutations[hashOffXZ + 1], xCoord - 1.0, zCoord - 1.0));
+            double y1 = lerp(fadeZ, x1, x2);
+            (*buffer)[index++] = (*buffer)[index++] + y1 * octaveWidth;
+        }
+    }
+}
+
 static inline void generateNoise(double *buffer, double x, double y, double z, int sizeX, int sizeY, int sizeZ, double offsetX, double offsetY, double offsetZ, PermutationTable *permutationTable, int nbOctaves) {
 
     double octavesFactor = 1.0;
@@ -130,6 +169,16 @@ static inline void generateNoise(double *buffer, double x, double y, double z, i
         octavesFactor /= 2.0;
     }
 }
+
+static inline void generateFixedNoise(double *buffer, double x, double z, int sizeX, int sizeZ, double offsetX, double offsetZ, PermutationTable *permutationTable, int nbOctaves) {
+
+    double octavesFactor = 1.0;
+    for (int octave = 0; octave < nbOctaves; octave++) {
+        generateFixedPermutations(&buffer, x, z, sizeX, sizeZ, offsetX * octavesFactor, offsetZ * octavesFactor, octavesFactor, permutationTable[octave]);
+        octavesFactor /= 2.0;
+    }
+}
+
 
 static inline void fillNoiseColumn(double **NoiseColumn, int x, int z, const double *temperature, const double *humidity, TerrainNoises terrainNoises) {
     // we only need
@@ -146,15 +195,15 @@ static inline void fillNoiseColumn(double **NoiseColumn, int x, int z, const dou
     // this is super fast (but we only care about 3,4,8,9,13,14,18,19,23,24)
     auto *surfaceNoise = new double[5 * 5];
     auto *depthNoise = new double[5 * 5];
-    surfaceNoise = generateFixedNoise(surfaceNoise, x, z, 5, 5, 1.121, 1.121, terrainNoises.scale);
-    depthNoise = generateFixedNoise(depthNoise, x, z, 5, 5, 200, 200, terrainNoises.depth);
+    generateFixedNoise(surfaceNoise, x, z, 5, 5, 1.121, 1.121, terrainNoises.scale, 10);
+    generateFixedNoise(depthNoise, x, z, 5, 5, 200.0, 200.0, terrainNoises.depth, 16);
 
     auto *mainLimitPerlinNoise = new double[5 * 17 * 5];
     auto *minLimitPerlinNoise = new double[5 * 17 * 5];
     auto *maxLimitPerlinNoise = new double[5 * 17 * 5];
-    generateNoise(mainLimitPerlinNoise, x, 0, z, 5, 17, 5, d / 80, d1 / 160, d / 80, terrainNoises.mainLimit,8);
-    generateNoise(minLimitPerlinNoise, x, 0, z, 5, 17, 5, d, d1, d, terrainNoises.minLimit,16);
-    generateNoise(maxLimitPerlinNoise, x, 0, z, 5, 17, 5, d, d1, d, terrainNoises.maxLimit,16);
+    generateNoise(mainLimitPerlinNoise, x, 0, z, 5, 17, 5, d / 80, d1 / 160, d / 80, terrainNoises.mainLimit, 8);
+    generateNoise(minLimitPerlinNoise, x, 0, z, 5, 17, 5, d, d1, d, terrainNoises.minLimit, 16);
+    generateNoise(maxLimitPerlinNoise, x, 0, z, 5, 17, 5, d, d1, d, terrainNoises.maxLimit, 16);
     int possibleCellCounter[10] = {3, 4, 8, 9, 13, 14, 18, 19, 23, 24};
     for (int cellCounter : possibleCellCounter) {
         int X = (cellCounter / 5) * 3 + 1; // 1 4 7 10 13
@@ -217,7 +266,7 @@ static inline void fillNoiseColumn(double **NoiseColumn, int x, int z, const dou
     }
 }
 
-static inline uint8_t *generateTerrain(int chunkX, int chunkZ, uint8_t *chunkCache, double *temperatures, double *humidity, TerrainNoises terrainNoises) {
+static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache, double *temperatures, double *humidity, TerrainNoises terrainNoises) {
     uint8_t quadrant = 4;
     uint8_t columnSize = 17;
     uint8_t cellsize = 5;
@@ -266,7 +315,7 @@ static inline uint8_t *generateTerrain(int chunkX, int chunkZ, uint8_t *chunkCac
                         if (stoneLimit > 0.0) { //3d perlin condition
                             block = 1;
                         }
-                        chunkCache[index] = block;
+                        (*chunkCache)[index] = block;
                         index += 128;
                         stoneLimit += stepThirdNoise_0_1;
                     }
@@ -282,20 +331,19 @@ static inline uint8_t *generateTerrain(int chunkX, int chunkZ, uint8_t *chunkCac
             }
         }
     }
-    return chunkCache;
 }
 
 
-static int replaceBlockForBiomes(int i, int j, uint8_t *chunkCache, const int *biomes, Random *worldRandom, TerrainNoises terrainNoises) {
+static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunkCache, const Biomes *biomes, Random *worldRandom, TerrainNoises terrainNoises) {
     uint8_t oceanLevel = 64;
     uint8_t MIN = oceanLevel;
     double noiseFactor = 0.03125;
     auto *sandFields = new double[16 * 16];
     auto *gravelField = new double[16 * 16];
     auto *heightField = new double[16 * 16];
-    generateNoise(sandFields, i * 16, j * 16, 0.0, 16, 16, 1, noiseFactor, noiseFactor, 1.0, terrainNoises.shoresBottomComposition, 4);
-    generateNoise(gravelField, j * 16, 109.0134, i * 16, 16, 1, 16, noiseFactor, 1.0, noiseFactor, terrainNoises.shoresBottomComposition, 4);
-    generateNoise(heightField, i * 16, j * 16, 0.0, 16, 16, 1, noiseFactor * 2.0, noiseFactor * 2.0, noiseFactor * 2.0, terrainNoises.surfaceElevation, 4);
+    generateNoise(sandFields, chunkX * 16, chunkZ * 16, 0.0, 16, 16, 1, noiseFactor, noiseFactor, 1.0, terrainNoises.shoresBottomComposition, 4);
+    generateNoise(gravelField, chunkZ * 16, 109.0134, chunkX * 16, 16, 1, 16, noiseFactor, 1.0, noiseFactor, terrainNoises.shoresBottomComposition, 4);
+    generateNoise(heightField, chunkX * 16, chunkZ * 16, 0.0, 16, 16, 1, noiseFactor * 2.0, noiseFactor * 2.0, noiseFactor * 2.0, terrainNoises.surfaceElevation, 4);
 
     for (int x = 0; x < 16; x++) {
         for (int k = 0; k < 12; k++) {
@@ -316,7 +364,7 @@ static int replaceBlockForBiomes(int i, int j, uint8_t *chunkCache, const int *b
             uint8_t belowOceanAkaEarthCrust = DIRT;
             for (int y = 127; y >= MIN; y--) {
                 int chunkCachePos = (x * 16 + z) * 128 + y;
-                uint8_t previousBlock = chunkCache[chunkCachePos];
+                uint8_t previousBlock = (*chunkCache)[chunkCachePos];
 
                 if (previousBlock == 0) {
                     state = -1;
@@ -347,12 +395,12 @@ static int replaceBlockForBiomes(int i, int j, uint8_t *chunkCache, const int *b
                     }
                     state = elevation;
                     // above ocean level
-                    chunkCache[chunkCachePos] = aboveOceanAkaLand;
+                    (*chunkCache)[chunkCachePos] = aboveOceanAkaLand;
                     continue;
                 }
                 if (state > 0) {
                     state--;
-                    chunkCache[chunkCachePos] = belowOceanAkaEarthCrust;
+                    (*chunkCache)[chunkCachePos] = belowOceanAkaEarthCrust;
 
                 }
             }
@@ -387,18 +435,58 @@ static inline TerrainNoises *initTerrain(uint64_t worldSeed) {
     return terrainNoises;
 }
 
-//static inline uint8_t *provideChunk(int chunkX, int chunkZ, BiomeGeneration biomeGenerationInstance, BiomesBase[] biomesForGeneration) {
-//    worldRandom.setSeed((long) chunkX * 0x4f9939f508L + (long) chunkZ * 0x1ef1565bd5L);
-//    byte[]
-//    chunkCache = new byte[32768];
-//    // this.biomesForGeneration=this.biomeGenerationInstance.loadBiomes(this.biomesForGeneration, chunkX * 16, chunkZ * 16, 16, 16);
-//    this.biomeGenerationInstance = biomeGenerationInstance;
-//    double[]
-//    temperatures = this.biomeGenerationInstance.temperature;
-//    generateTerrain(chunkX, chunkZ, chunkCache, temperatures);
-//    replaceBlockForBiomes(chunkX, chunkZ, chunkCache, biomesForGeneration);
-//    return chunkCache;
-//}
+static inline uint8_t *provideChunk(int chunkX, int chunkZ, BiomeResult *biomeResult, TerrainNoises *terrainNoises) {
+    Random worldRandom = get_random((uint64_t) ((long) chunkX * 0x4f9939f508L + (long) chunkZ * 0x1ef1565bd5L));
+    auto *chunkCache = new uint8_t[32768];
+    generateTerrain(chunkX, chunkZ, &chunkCache, biomeResult->temperature, biomeResult->humidity, *terrainNoises);
+    replaceBlockForBiomes(chunkX, chunkZ, &chunkCache, biomeResult->biomes, &worldRandom, *terrainNoises);
+    return chunkCache;
+}
+
+void delete_terrain_result(TerrainResult *terrainResult) {
+    delete[] terrainResult->chunkCache;
+    delete[] terrainResult->chunkHeights;
+    delete_biome_result(terrainResult->biomeResult);
+    delete terrainResult;
+}
+
+uint8_t *TerrainInternalWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, BiomeResult *biomeResult) {
+    TerrainNoises *terrainNoises = initTerrain(worldSeed);
+    auto *chunkCache = provideChunk(chunkX, chunkZ, biomeResult, terrainNoises);
+    delete[] terrainNoises;
+    return chunkCache;
+}
+
+
+
+TerrainResult *TerrainWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
+    BiomeResult *biomeResult = BiomeWrapper(worldSeed, chunkX, chunkZ);
+    auto* chunkCache=TerrainInternalWrapper(worldSeed, chunkX, chunkZ, biomeResult);
+    auto *chunkHeights = new uint8_t[4 * 16];
+    for (int x = 12; x < 16; ++x) {
+        for (int z = 0; z < 16; ++z) {
+            int pos = 128 * x * 16 + 128 * z;
+            int y;
+            for (y = 80; y >= 70 && chunkCache[pos + y] == 0; y--) ;
+            chunkHeights[(x-12)*16+z]=(y+1);
+        }
+    }
+    auto* terrainResult=new TerrainResult;
+    terrainResult->biomeResult=biomeResult;
+    terrainResult->chunkHeights=chunkHeights;
+    terrainResult->chunkCache=chunkCache;
+    return terrainResult;
+}
+static void printHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ){
+    auto* terrainResult=TerrainWrapper(worldSeed,chunkX,chunkZ);
+    for (int x = 0; x < 4; ++x) {
+        for (int z = 0; z < 16; ++z) {
+            std::cout<<(int)terrainResult->chunkHeights[x*16+z]<<" ";
+        }
+        std::cout<<std::endl;
+    }
+}
+
 int main() {
-    initTerrain(10);
+    printHeights(1000,15,15);
 }

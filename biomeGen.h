@@ -13,6 +13,7 @@ struct BiomeNoises {
     PermutationTable precipitationOctaves[2];
 };
 
+
 static int grad2[12][2] = {{1,  1,},
                            {-1, 1,},
                            {1,  -1,},
@@ -40,6 +41,12 @@ enum Biomes {
     IceDesert,
     Tundra,
 };
+
+struct BiomeResult {
+    double *temperature;
+    double *humidity;
+    Biomes *biomes;
+};
 static const char *biomesNames[] = {"Rainforest", "Swampland", "Seasonal Forest", "Forest", "Savanna", "Shrubland", "Taiga", "Desert", "Plains", "IceDesert", "Tundra"};
 
 // @formatter:off
@@ -49,10 +56,12 @@ static inline Biomes biomesTable[4096]={Tundra, Tundra, Tundra, Tundra, Tundra, 
 #define F2 0.3660254037844386
 #define G2 0.21132486540518713
 
-static Biomes *BiomeWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ);
+BiomeResult *BiomeWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ);
 
 static inline BiomeNoises *initBiomeGen(uint64_t worldSeed);
 
-static inline Biomes *getBiomes(Biomes *biomes, int posX, int posZ, int sizeX, int sizeZ, BiomeNoises *biomesOctaves);
+static inline BiomeResult *getBiomes(int posX, int posZ, int sizeX, int sizeZ, BiomeNoises *biomesOctaves);
+
+void delete_biome_result(BiomeResult *biomeResult);
 
 #endif //TERRAINGENCPP_BIOMEGEN_H

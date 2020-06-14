@@ -5,4 +5,4 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS)
 
 add_executable(biomeGen biomeGen.cpp)
-add_executable(terrainGen terrainGen.cpp)
+add_executable(terrainGen biomeGen.cpp terrainGen.cpp)
