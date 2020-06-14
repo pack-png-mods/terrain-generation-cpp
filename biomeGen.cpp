@@ -1,63 +1,8 @@
 #include <iostream>
 #include <chrono>
+#include "biomeGen.h"
 
 static_assert(std::numeric_limits<double>::is_iec559, "This code requires IEEE-754 doubles");
-
-#define Random uint64_t
-#define RANDOM_MULTIPLIER 0x5DEECE66DULL
-#define RANDOM_ADDEND 0xBULL
-#define RANDOM_MASK (1ULL << 48u) - 1
-#define RANDOM_SCALE 0x1.0p-53
-#define get_random(seed) ((Random)((seed ^ RANDOM_MULTIPLIER) & RANDOM_MASK))
-
-
-static inline uint32_t random_next(Random *random, int bits) {
-    *random = (*random * RANDOM_MULTIPLIER + RANDOM_ADDEND) & RANDOM_MASK;
-    return (uint32_t) (*random >> (48u - bits));
-}
-
-static inline uint32_t random_next_int(Random *random, const uint16_t bound) {
-    int r = random_next(random, 31);
-    const uint16_t m = bound - 1;
-    if ((bound & m) == 0) {
-        // Could probably use __mul64hi here
-        r = (uint32_t) ((bound * (uint64_t) r) >> 31u);
-    } else {
-        for (int u = r;
-             u - (r = u % bound) + m < 0;
-             u = random_next(random, 31));
-    }
-    return r;
-}
-
-static inline double next_double(Random *random) {
-    return (double) ((((uint64_t) ((uint32_t) random_next(random, 26)) << 27u)) + random_next(random, 27)) * RANDOM_SCALE;
-}
-inline uint64_t random_next_long (Random *random) {
-    return (((uint64_t)random_next(random, 32)) << 32u) + (int32_t)random_next(random, 32);
-}
-
-struct PermutationTable {
-    double xo;
-    double yo;
-    double zo;
-    uint8_t permutations[512];
-};
-
-static int grad2[12][2] = {{1,  1,},
-                           {-1, 1,},
-                           {1,  -1,},
-                           {-1, -1,},
-                           {1,  0,},
-                           {-1, 0,},
-                           {1,  0,},
-                           {-1, 0,},
-                           {0,  1,},
-                           {0,  -1,},
-                           {0,  1,},
-                           {0,  -1,}};
-#define F2 0.3660254037844386
-#define G2 0.21132486540518713
 
 static inline void simplexNoise(double **buffer, double chunkX, double chunkZ, int x, int z, double offsetX, double offsetZ, double octaveFactor, PermutationTable permutationTable) {
     int k = 0;
@@ -129,7 +74,8 @@ static inline void simplexNoise(double **buffer, double chunkX, double chunkZ, i
             }
             // Add contributions from each corner to get the final noise value.
             // The result is scaled to return values in the interval [-1,1].
-            (*buffer)[k++] =(*buffer)[k] +70.0 * (n0 + n1 + n2) * octaveFactor;
+            (*buffer)[k] = (*buffer)[k] + 70.0 * (n0 + n1 + n2) * octaveFactor;
+            k++;
 
         }
 
@@ -154,105 +100,30 @@ static inline void getFixedNoise(double *buffer, double chunkX, double chunkZ, i
 
 }
 
-struct BiomesOctaves {
-    PermutationTable temperatureOctaves[4];
-    PermutationTable humidityOctaves[4];
-    PermutationTable precipitationOctaves[2];
-};
 
-static inline BiomesOctaves *initBiomeGen(uint64_t worldSeed) {
-    auto *biomesOctaves = new BiomesOctaves;
-    Random random = (get_random(worldSeed * 9871L));
-    for (auto &octave : biomesOctaves->temperatureOctaves) {
-        octave.xo = next_double(&random) * 256.0;
-        octave.yo = next_double(&random) * 256.0;
-        octave.zo = next_double(&random) * 256.0;
-        uint8_t *permutations = octave.permutations;
-        for (int j = 0; j < 256; ++j) {
-            permutations[j] = j;
-        }
-        for (int index = 0; index < 256; ++index) {
-            uint32_t randomIndex = random_next_int(&random, 256 - index) + index;
-            if (randomIndex != index) {
-                // swap
-                permutations[index] ^= permutations[randomIndex];
-                permutations[randomIndex] ^= permutations[index];
-                permutations[index] ^= permutations[randomIndex];
-            }
-            permutations[index + 256] = permutations[index];
-        }
-    }
-    random = get_random(worldSeed * 39811L);
-    for (auto &octave : biomesOctaves->humidityOctaves) {
-        octave.xo = next_double(&random) * 256.0;
-        octave.yo = next_double(&random) * 256.0;
-        octave.zo = next_double(&random) * 256.0;
-        uint8_t *permutations = octave.permutations;
-        for (int j = 0; j < 256; ++j) {
-            permutations[j] = j;
-        }
-        for (int index = 0; index < 256; ++index) {
-            uint32_t randomIndex = random_next_int(&random, 256 - index) + index;
-            if (randomIndex != index) {
-                // swap
-                permutations[index] ^= permutations[randomIndex];
-                permutations[randomIndex] ^= permutations[index];
-                permutations[index] ^= permutations[randomIndex];
-            }
-            permutations[index + 256] = permutations[index];
-        }
-    }
-    random = get_random(worldSeed * 0x84a59L);
-    for (auto &octave : biomesOctaves->precipitationOctaves) {
-        octave.xo = next_double(&random) * 256.0;
-        octave.yo = next_double(&random) * 256.0;
-        octave.zo = next_double(&random) * 256.0;
-        uint8_t *permutations = octave.permutations;
-        for (int j = 0; j < 256; ++j) {
-            permutations[j] = j;
-        }
-        for (int index = 0; index < 256; ++index) {
-            uint32_t randomIndex = random_next_int(&random, 256 - index) + index;
-            if (randomIndex != index) {
-                // swap
-                permutations[index] ^= permutations[randomIndex];
-                permutations[randomIndex] ^= permutations[index];
-                permutations[index] ^= permutations[randomIndex];
-            }
-            permutations[index + 256] = permutations[index];
-        }
-    }
-    return biomesOctaves;
+static inline BiomeNoises *initBiomeGen(uint64_t worldSeed) {
+    auto *pBiomeNoises = new BiomeNoises;
+    Random worldRandom;
+    PermutationTable *octaves;
+    worldRandom = get_random(worldSeed * 9871L);
+    octaves = pBiomeNoises->temperatureOctaves;
+    initOctaves(octaves, &worldRandom, 4);
+    worldRandom = get_random(worldSeed * 39811L);
+    octaves = pBiomeNoises->humidityOctaves;
+    initOctaves(octaves, &worldRandom, 4);
+    worldRandom = get_random(worldSeed * 0x84a59L);
+    octaves = pBiomeNoises->precipitationOctaves;
+    initOctaves(octaves, &worldRandom, 2);
+    return pBiomeNoises;
 }
 
-enum Biomes {
-    Rainforest,
-    Swampland,
-    Seasonal_forest,
-    Forest,
-    Savanna,
-    Shrubland,
-    Taiga,
-    Desert,
-    Plains,
-    IceDesert,
-    Tundra,
-};
-static const char *biomesNames[] = {"Rainforest", "Swampland", "Seasonal_forest", "Forest", "Savanna", "Shrubland", "Taiga", "Desert", "Plains", "IceDesert", "Tundra"};
 
-// @formatter:off
-static inline Biomes biomesTable[4096]={Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Desert, Desert, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Desert, Desert, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Savanna, Savanna, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Plains, Plains, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Shrubland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Seasonal_forest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Seasonal_forest, Rainforest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Rainforest, Rainforest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Rainforest, Rainforest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Rainforest, Rainforest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Rainforest, Rainforest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Forest, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Rainforest, Rainforest, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Tundra, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Taiga, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Swampland, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Forest, Rainforest, Rainforest,};
-// @formatter:on
-
-static inline Biomes *getBiomes(Biomes *biomes, int posX, int posZ, int sizeX, int sizeZ, BiomesOctaves *biomesOctaves) {
+static inline Biomes *getBiomes(Biomes *biomes, int posX, int posZ, int sizeX, int sizeZ, BiomeNoises *biomesOctaves) {
     auto *temperature = new double[sizeX * sizeZ];
     auto *humidity = new double[sizeX * sizeZ];
     auto *precipitation = new double[sizeX * sizeZ];
-    PermutationTable *permutationTable=biomesOctaves->temperatureOctaves;
     getFixedNoise(temperature, posX, posZ, sizeX, sizeZ, 0.02500000037252903, 0.02500000037252903, 0.25, (*biomesOctaves).temperatureOctaves, 4);
-    permutationTable=biomesOctaves->humidityOctaves;
     getFixedNoise(humidity, posX, posZ, sizeX, sizeZ, 0.05000000074505806, 0.05000000074505806, 0.33333333333333331, (*biomesOctaves).humidityOctaves, 4);
-    permutationTable=biomesOctaves->precipitationOctaves;
     getFixedNoise(precipitation, posX, posZ, sizeX, sizeZ, 0.25, 0.25, 0.58823529411764708, (*biomesOctaves).precipitationOctaves, 2);
     int index = 0;
     for (int X = 0; X < sizeX; X++) {
@@ -283,11 +154,12 @@ static inline Biomes *getBiomes(Biomes *biomes, int posX, int posZ, int sizeX, i
 }
 
 static Biomes *BiomeWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
-    BiomesOctaves *biomesOctaves = initBiomeGen(worldSeed);
-    return getBiomes(new Biomes[16 * 16], chunkX*16, chunkZ*16, 16, 16, biomesOctaves);
+    BiomeNoises *biomesOctaves = initBiomeGen(worldSeed);
+    return getBiomes(new Biomes[16 * 16], chunkX * 16, chunkZ * 16, 16, 16, biomesOctaves);
 }
-static inline void printBiomes(int64_t worldSeed, int32_t chunkX, int32_t chunkZ){
-    Biomes *biomes = BiomeWrapper(worldSeed,chunkX,chunkZ);
+
+static inline void printBiomes(int64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
+    Biomes *biomes = BiomeWrapper(worldSeed, chunkX, chunkZ);
     for (int i = 0; i < 16 * 16; ++i) {
         std::cout << biomesNames[biomes[i]] << " ";
     }
@@ -295,15 +167,15 @@ static inline void printBiomes(int64_t worldSeed, int32_t chunkX, int32_t chunkZ
 }
 
 int main() {
-   Random random=get_random(123456u);
+    Random random = get_random(123456u);
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < 1000; ++i) {
-        long seed=random_next_long(&random);
+        long seed = random_next_long(&random);
         //std::cout<<seed<<std::endl;
-        printBiomes(seed,15,16);
+        printBiomes(seed, 15, 16);
     }
     auto finish = std::chrono::high_resolution_clock::now();
-    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(finish-start).count()/1e9 << " s\n";
+    std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(finish - start).count() / 1e9 << " s\n";
 
 }
