@@ -561,7 +561,7 @@ TerrainResult *TerrainWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ
     auto *chunkCache = TerrainInternalWrapper(worldSeed, chunkX, chunkZ, biomeResult);
     auto *chunkHeights = new uint8_t[4 * 16];
     for (int x = 0; x < 16; ++x) {
-        for (int z = 0; z < 16; ++z) {
+        for (int z = 12; z < 16; ++z) {
             int pos = 128 * x * 16 + 128 * z;
             int y;
             for (y = 80; y >= 70 && chunkCache[pos + y] == 0; y--);
