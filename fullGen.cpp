@@ -752,7 +752,7 @@ static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunk
             int state = -1;
             uint8_t aboveOceanAkaLand = GRASS;
             uint8_t belowOceanAkaEarthCrust = DIRT;
-            for (int y = 90; y >= MIN; y--) {
+            for (int y = 85; y >= 70; y--) {
                 int chunkCachePos = (x * 16 + z) * 128 + y;
                 uint8_t previousBlock = (*chunkCache)[chunkCachePos];
                 if (previousBlock == AIR) {
@@ -767,10 +767,9 @@ static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunk
                     if (elevation <= 0) { // if in a deep
                         aboveOceanAkaLand = AIR;
                         belowOceanAkaEarthCrust = STONE;
-                        (*chunkHeights)[x * 16 + z] = y;
                         break;
                     }else{
-                        (*chunkHeights)[x * 16 + z] = y;
+                        (*chunkHeights)[x * 16 + z] = y+1;
                         break;
                     }
                     state = elevation;
@@ -929,7 +928,6 @@ void filterDownSeeds(const uint64_t *worldSeeds, int32_t posX, int64_t nbSeeds) 
 }
 
 int main(int argc, char *argv[]) {
-    printHeights(90389547180974LLU, 6, -3);
     std::ifstream file("test.txt");
     if (!file.is_open()) {
         std::cout << "file was not loaded" << std::endl;
@@ -963,7 +961,7 @@ int main(int argc, char *argv[]) {
     file.close();
     std::cout << "Running " << length << " seeds" << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
-    filterDownSeeds(worldSeeds, 99, 0);
+    filterDownSeeds(worldSeeds, 99, length);
     auto finish = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(finish - start).count() / 1e9 << " s\n";
     delete[] worldSeeds;
