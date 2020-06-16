@@ -8,19 +8,18 @@
 #define get_random(seed) ((Random)((seed ^ RANDOM_MULTIPLIER) & RANDOM_MASK))
 
 
-static inline uint32_t random_next(Random *random, int bits) {
+static inline int32_t random_next(Random *random, int bits) {
     *random = (*random * RANDOM_MULTIPLIER + RANDOM_ADDEND) & RANDOM_MASK;
-    return (uint32_t) (*random >> (48u - bits));
+    return (int32_t) (*random >> (48u - bits));
 }
 
-static inline uint32_t random_next_int(Random *random, const uint16_t bound) {
-    uint32_t r = random_next(random, 31);
+static inline int32_t random_next_int(Random *random, const uint16_t bound) {
+    int32_t r = random_next(random, 31);
     const uint16_t m = bound - 1u;
     if ((bound & m) == 0) {
-        // Could probably use __mul64hi here
-        r = (uint32_t) ((bound * (uint64_t) r) >> 31u);
+        r = (int32_t) ((bound * (uint64_t) r) >> 31u);
     } else {
-        for (int u = r;
+        for (int32_t u = r;
              u - (r = u % bound) + m < 0;
              u = random_next(random, 31));
     }
