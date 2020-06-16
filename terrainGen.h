@@ -1,6 +1,8 @@
+#include "perlinCommon.h"
+
 #ifndef TERRAINGENCPP_TERRAINGEN_H
 #define TERRAINGENCPP_TERRAINGEN_H
-#include "perlinCommon.h"
+
 struct TerrainNoises {
     PermutationTable minLimit[16];
     PermutationTable maxLimit[16];
@@ -11,7 +13,7 @@ struct TerrainNoises {
     PermutationTable depth[16];
     PermutationTable forest[8];
 };
-enum blocks{
+enum blocks {
     AIR,
     STONE,
     GRASS,
@@ -23,14 +25,18 @@ enum blocks{
     ICE,
 };
 
-struct TerrainResult{
-    BiomeResult*biomeResult;
+struct TerrainResult {
+    BiomeResult *biomeResult;
     uint8_t *chunkCache;
     uint8_t *chunkHeights;
 };
 
 void delete_terrain_result(TerrainResult *terrainResult);
+
 uint8_t *TerrainInternalWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, BiomeResult *biomeResult);
+
 TerrainResult *TerrainWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ);
+
 uint8_t *TerrainHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, BiomeResult *biomeResult);
+
 #endif //TERRAINGENCPP_TERRAINGEN_H

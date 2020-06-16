@@ -1,13 +1,14 @@
 #include <iostream>
-#include <fstream>
 #include <chrono>
+#include <fstream>
+#include <algorithm>
 #include "biomeGen.h"
 #include "terrainGen.h"
 
 # define OFFSET 12
 
-void filterDownSeeds(const int64_t *worldSeeds, int32_t posX, int64_t nbSeeds) {
-    int mapWat[] = {77, 78, 77, 75}; // from z 12 to z15 in chunk
+void filterDownSeeds(const uint64_t *worldSeeds, int32_t posX, int64_t nbSeeds) {
+    uint8_t mapWat[] = {77, 78, 77, 75}; // from z 12 to z15 in chunk
     int chunkX = (int32_t) ((posX + 16u) >> 4u) - 1;
     int chunkZ = -3;
     for (int i = 0; i < nbSeeds; ++i) {
@@ -28,7 +29,7 @@ void filterDownSeeds(const int64_t *worldSeeds, int32_t posX, int64_t nbSeeds) {
         uint8_t *chunkCache = TerrainInternalWrapper(seed, chunkX, chunkZ, biomeResult);
         for (int x = 0; x < 16; x++) {
             bool flag = true;
-            for (int z = 0; z < (16 - OFFSET); z++) {
+            for (uint8_t z = 0; z < (16 - OFFSET); z++) {
                 uint32_t pos = 128 * x * 16 + 128 * (z + OFFSET);
                 uint32_t y;
 
@@ -51,41 +52,40 @@ void filterDownSeeds(const int64_t *worldSeeds, int32_t posX, int64_t nbSeeds) {
 
 int main(int argc, char *argv[]) {
 
-
-    FILE *fp = fopen("test.txt", "r");
-    if (fp == nullptr) {
+    std::ifstream file("test.txt");
+    if (!file.is_open()) {
         std::cout << "file was not loaded" << std::endl;
         throw std::runtime_error("file was not loaded");
     }
-    int64_t length=0;
-    for (int c = getc(fp); c != EOF; c = getc(fp))if (c == '\n')length = length + 1;
-    rewind(fp);
-    auto *worldSeeds = new int64_t[length];
-    char *line = nullptr;
-    size_t len = 0;
-    char *endPtr;
+    int64_t length = std::count(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>(), '\n');
+    file.seekg(file.beg);
+    auto *worldSeeds = new uint64_t[length];
+    std::string line;
+    size_t sz;
     int64_t seed;
-    int64_t index=0;
-    while ((getline(&line, &len, fp)) != -1) {
+    int64_t index = 0;
+    while (getline(file, line).good()) {
         errno = 0;
-        seed = strtoll(line, &endPtr, 10);
-        if ((errno == ERANGE && (seed == INT64_MAX || seed == INT64_MIN))
-            || (errno != 0 && seed == 0)) {
+        try {
+            seed = std::stoull(line, &sz, 10);
+            if (sz != line.size()) {
+                fprintf(stderr, "Size of parsed and size of line disagree, wrong type\n");
+                exit(EXIT_FAILURE);
+            }
+        } catch (const std::invalid_argument &) {
             std::cout << "Error conversion" << std::endl;
             perror("strtol");
             exit(EXIT_FAILURE);
-        }
-        if (endPtr == line) {
-            fprintf(stderr, "No digits were found\n");
+        } catch (const std::out_of_range &) {
+            std::cout << "Out of range" << std::endl;
             exit(EXIT_FAILURE);
         }
-        worldSeeds[index++]=seed;
+        worldSeeds[index++] = seed;
     }
-    fclose(fp);
-    if (line)
-        free(line);
+    file.close();
+    std::cout << "Running " << length << " seeds" <<std::endl;
     auto start = std::chrono::high_resolution_clock::now();
-    filterDownSeeds(worldSeeds, 99, length);
+    filterDownSeeds(worldSeeds,99, length);
     auto finish = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(finish - start).count() / 1e9 << " s\n";
     delete[] worldSeeds;

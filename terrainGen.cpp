@@ -72,7 +72,7 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
         if (xCoord < (double) clampedXcoord) {
             clampedXcoord--;
         }
-        auto xBottoms = (int32_t) ((uint32_t) clampedXcoord & 0xffu);
+        auto xBottoms = (uint8_t) ((uint32_t) clampedXcoord & 0xffu);
         xCoord -= clampedXcoord;
         t = xCoord * 6 - 15;
         w = (xCoord * t + 10);
@@ -82,7 +82,7 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
         if (zCoord < (double) clampedZCoord) {
             clampedZCoord--;
         }
-        auto zBottoms = (int32_t) ((uint32_t) clampedZCoord & 0xffu);
+        auto zBottoms = (uint8_t) ((uint32_t) clampedZCoord & 0xffu);
         zCoord -= clampedZCoord;
         t = zCoord * 6 - 15;
         w = (zCoord * t + 10);
@@ -94,7 +94,7 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
             if (yCoords < (double) clampedYCoords) {
                 clampedYCoords--;
             }
-            auto yBottoms = (int32_t) ((uint32_t) clampedYCoords & 0xffu);
+            auto yBottoms = (uint8_t) ((uint32_t) clampedYCoords & 0xffu);
             yCoords -= clampedYCoords;
             t = yCoords * 6 - 15;
             w = yCoords * t + 10;
@@ -103,10 +103,10 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
 
             if (Y == 0 || yBottoms != i2) { // this is wrong on so many levels, same ybottoms doesnt mean x and z were the same...
                 i2 = yBottoms;
-                uint8_t k2 = permutations[permutations[xBottoms] + yBottoms] + zBottoms;
-                uint8_t l2 = permutations[permutations[xBottoms] + yBottoms + 1] + zBottoms;
-                uint8_t k3 = permutations[permutations[xBottoms + 1] + yBottoms] + zBottoms;
-                uint8_t l3 = permutations[permutations[xBottoms + 1] + yBottoms + 1] + zBottoms;
+                uint16_t k2 = permutations[permutations[xBottoms] + yBottoms] + zBottoms;
+                uint16_t l2 = permutations[permutations[xBottoms] + yBottoms + 1] + zBottoms;
+                uint16_t k3 = permutations[permutations[xBottoms + 1] + yBottoms] + zBottoms;
+                uint16_t l3 = permutations[permutations[xBottoms + 1] + yBottoms + 1] + zBottoms;
                 x1 = lerp(fadeX, grad(permutations[k2], xCoord, yCoords, zCoord), grad(permutations[k3], xCoord - 1.0, yCoords, zCoord));
                 x2 = lerp(fadeX, grad(permutations[l2], xCoord, yCoords - 1.0, zCoord), grad(permutations[l3], xCoord - 1.0, yCoords - 1.0, zCoord));
                 xx1 = lerp(fadeX, grad(permutations[k2 + 1], xCoord, yCoords, zCoord - 1.0), grad(permutations[k3 + 1], xCoord - 1.0, yCoords, zCoord - 1.0));
@@ -175,7 +175,7 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
         if (xCoord < (double) clampedXcoord) {
             clampedXcoord--;
         }
-        auto xBottoms = (int32_t) ((uint32_t) clampedXcoord & 0xffu);
+        auto xBottoms = (uint8_t) ((uint32_t) clampedXcoord & 0xffu);
         xCoord -= clampedXcoord;
         t = xCoord * 6 - 15;
         w = (xCoord * t + 10);
@@ -186,7 +186,7 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
             if (zCoord < (double) clampedZCoord) {
                 clampedZCoord--;
             }
-            auto zBottoms = (int32_t) ((uint32_t) clampedZCoord & 0xffu);
+            auto zBottoms = (uint8_t) ((uint32_t) clampedZCoord & 0xffu);
             zCoord -= clampedZCoord;
             t = zCoord * 6 - 15;
             w = (zCoord * t + 10);
@@ -197,7 +197,7 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
                 if (yCoords < (double) clampedYCoords) {
                     clampedYCoords--;
                 }
-                auto yBottoms = (int32_t) ((uint32_t) clampedYCoords & 0xffu);
+                auto yBottoms = (uint8_t) ((uint32_t) clampedYCoords & 0xffu);
                 yCoords -= clampedYCoords;
                 t = yCoords * 6 - 15;
                 w = yCoords * t + 10;
@@ -206,10 +206,10 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
 
                 if (Y == 0 || yBottoms != i2) { // this is wrong on so many levels, same ybottoms doesnt mean x and z were the same...
                     i2 = yBottoms;
-                    uint8_t k2 = permutations[permutations[xBottoms] + yBottoms] + zBottoms;
-                    uint8_t l2 = permutations[permutations[xBottoms] + yBottoms + 1] + zBottoms;
-                    uint8_t k3 = permutations[permutations[xBottoms + 1] + yBottoms] + zBottoms;
-                    uint8_t l3 = permutations[permutations[xBottoms + 1] + yBottoms + 1] + zBottoms;
+                    uint16_t k2 = permutations[permutations[xBottoms] + yBottoms] + zBottoms;
+                    uint16_t l2 = permutations[permutations[xBottoms] + yBottoms + 1] + zBottoms;
+                    uint16_t k3 = permutations[permutations[xBottoms + 1] + yBottoms] + zBottoms;
+                    uint16_t l3 = permutations[permutations[xBottoms + 1] + yBottoms + 1] + zBottoms;
                     x1 = lerp(fadeX, grad(permutations[k2], xCoord, yCoords, zCoord), grad(permutations[k3], xCoord - 1.0, yCoords, zCoord));
                     x2 = lerp(fadeX, grad(permutations[l2], xCoord, yCoords - 1.0, zCoord), grad(permutations[l3], xCoord - 1.0, yCoords - 1.0, zCoord));
                     xx1 = lerp(fadeX, grad(permutations[k2 + 1], xCoord, yCoords, zCoord - 1.0), grad(permutations[k3 + 1], xCoord - 1.0, yCoords, zCoord - 1.0));
@@ -353,7 +353,7 @@ static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache,
     fillNoiseColumn(&NoiseColumn, chunkX * quadrant, chunkZ * quadrant, temperatures, humidity, terrainNoises);
     for (uint8_t x = 0; x < quadrant; x++) {
         uint8_t z = 3;
-        for (int height = 9; height < 10; height++) {
+        for (uint8_t height = 9; height < 10; height++) {
             int off_0_0 = x * cellsize + z;
             int off_0_1 = x * cellsize + (z + 1);
             int off_1_0 = (x + 1) * cellsize + z;
@@ -381,7 +381,7 @@ static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache,
                 double stepSecondNoise_1_0 = (firstNoise_1_0 - firstNoise_0_0) * interpSecondOctave;
                 double stepSecondNoise_1_1 = (firstNoise_1_1 - firstNoise_0_1) * interpSecondOctave;
                 for (uint8_t xOffset = 0; xOffset < 4; xOffset++) {
-                    uint8_t currentHeight = height * 8 + heightOffset; // max is 128
+                    uint8_t currentHeight = height * 8u + heightOffset; // max is 128
                     uint16_t index = (xOffset + x * 4u) << 11u | (z * 4u) << 7u | currentHeight;
                     double stoneLimit = secondNoise_0_0; // aka thirdNoise
                     double stepThirdNoise_0_1 = (secondNoise_0_1 - secondNoise_0_0) * interpThirdOctave;
@@ -410,7 +410,7 @@ static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache,
 }
 
 
-static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunkCache, const Biomes *biomes, Random *worldRandom, TerrainNoises terrainNoises) {
+static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunkCache, Random *worldRandom, TerrainNoises terrainNoises) {
     uint8_t oceanLevel = 64;
     uint8_t MIN = oceanLevel;
     double noiseFactor = 0.03125;
@@ -432,7 +432,6 @@ static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunk
             }
         }
         for (int z = 12; z < 16; z++) {
-            int biome = biomes[x * 16 + z];
             bool sandy = sandFields[x + z * 16] + next_double(worldRandom) * 0.20000000000000001 > 0.0;
             bool gravelly = gravelField[x + z * 16] + next_double(worldRandom) * 0.20000000000000001 > 3;
             int elevation = (int) (heightField[x + z * 16] / 3.0 + 3.0 + next_double(worldRandom) * 0.25);
@@ -519,7 +518,7 @@ static inline uint8_t *provideChunk(int chunkX, int chunkZ, BiomeResult *biomeRe
     Random worldRandom = get_random((uint64_t) ((long) chunkX * 0x4f9939f508L + (long) chunkZ * 0x1ef1565bd5L));
     auto *chunkCache = new uint8_t[32768];
     generateTerrain(chunkX, chunkZ, &chunkCache, biomeResult->temperature, biomeResult->humidity, *terrainNoises);
-    replaceBlockForBiomes(chunkX, chunkZ, &chunkCache, biomeResult->biomes, &worldRandom, *terrainNoises);
+    replaceBlockForBiomes(chunkX, chunkZ, &chunkCache, &worldRandom, *terrainNoises);
     return chunkCache;
 }
 
@@ -533,7 +532,7 @@ void delete_terrain_result(TerrainResult *terrainResult) {
 uint8_t *TerrainInternalWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, BiomeResult *biomeResult) {
     TerrainNoises *terrainNoises = initTerrain(worldSeed);
     uint8_t *chunkCache = provideChunk(chunkX, chunkZ, biomeResult, terrainNoises);
-    delete[] terrainNoises;
+    delete terrainNoises;
     return chunkCache;
 }
 
