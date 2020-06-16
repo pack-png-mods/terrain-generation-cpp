@@ -1,4 +1,4 @@
-// nvcc -std c++14 main.cu -o terrain_gen -O4
+// nvcc -std c++14 main.cu -o terrain_gen -O3
 #include <iostream>
 #include <chrono>
 #include <string>
@@ -8,7 +8,7 @@
 
 static_assert(std::numeric_limits<double>::is_iec559, "This code requires IEEE-754 doubles");
 
-
+#define OFFSET 12
 #define Random uint64_t
 #define RANDOM_MULTIPLIER 0x5DEECE66DULL
 #define RANDOM_ADDEND 0xBULL
@@ -26,14 +26,14 @@ static inline void advance6(Random *random) {
 
 static inline int32_t random_next(Random *random, int bits) {
     *random = (*random * RANDOM_MULTIPLIER + RANDOM_ADDEND) & RANDOM_MASK;
-    return (int32_t) (*random >> (48u - bits));
+    return (int32_t)(*random >> (48u - bits));
 }
 
 static inline int32_t random_next_int(Random *random, const uint16_t bound) {
     int32_t r = random_next(random, 31);
     const uint16_t m = bound - 1u;
     if ((bound & m) == 0) {
-        r = (int32_t) ((bound * (uint64_t) r) >> 31u);
+        r = (int32_t)((bound * (uint64_t) r) >> 31u);
     } else {
         for (int32_t u = r;
              u - (r = u % bound) + m < 0;
@@ -43,7 +43,7 @@ static inline int32_t random_next_int(Random *random, const uint16_t bound) {
 }
 
 static inline double next_double(Random *random) {
-    return (double) ((((uint64_t) ((uint32_t) random_next(random, 26)) << 27u)) + random_next(random, 27)) * RANDOM_SCALE;
+    return (double) ((((uint64_t)((uint32_t) random_next(random, 26)) << 27u)) + random_next(random, 27)) * RANDOM_SCALE;
 }
 
 inline uint64_t random_next_long(Random *random) {
@@ -116,7 +116,7 @@ struct TerrainNoises {
     PermutationTable minLimit[16];
     PermutationTable maxLimit[16];
     PermutationTable mainLimit[8];
-    PermutationTable shoresBottomComposition[4];
+    //PermutationTable shoresBottomComposition[4];
     PermutationTable surfaceElevation[4];
     PermutationTable scale[10];
     PermutationTable depth[16];
@@ -135,7 +135,6 @@ enum blocks {
 
 struct TerrainResult {
     BiomeResult *biomeResult;
-    uint8_t *chunkCache;
     uint8_t *chunkHeights;
 };
 
@@ -403,7 +402,7 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
         if (xCoord < (double) clampedXcoord) {
             clampedXcoord--;
         }
-        auto xBottoms = (uint8_t) ((uint32_t) clampedXcoord & 0xffu);
+        auto xBottoms = (uint8_t)((uint32_t) clampedXcoord & 0xffu);
         xCoord -= clampedXcoord;
         t = xCoord * 6 - 15;
         w = (xCoord * t + 10);
@@ -413,7 +412,7 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
         if (zCoord < (double) clampedZCoord) {
             clampedZCoord--;
         }
-        auto zBottoms = (uint8_t) ((uint32_t) clampedZCoord & 0xffu);
+        auto zBottoms = (uint8_t)((uint32_t) clampedZCoord & 0xffu);
         zCoord -= clampedZCoord;
         t = zCoord * 6 - 15;
         w = (zCoord * t + 10);
@@ -425,7 +424,7 @@ static inline void generatePermutations(double **buffer, double x, double y, dou
             if (yCoords < (double) clampedYCoords) {
                 clampedYCoords--;
             }
-            auto yBottoms = (uint8_t) ((uint32_t) clampedYCoords & 0xffu);
+            auto yBottoms = (uint8_t)((uint32_t) clampedYCoords & 0xffu);
             yCoords -= clampedYCoords;
             t = yCoords * 6 - 15;
             w = yCoords * t + 10;
@@ -466,7 +465,7 @@ static inline void generateFixedPermutations(double **buffer, double x, double z
         if (xCoord < (double) clampedXCoord) {
             clampedXCoord--;
         }
-        auto xBottoms = (int32_t) ((uint32_t) clampedXCoord & 0xffu);
+        auto xBottoms = (int32_t)((uint32_t) clampedXCoord & 0xffu);
         xCoord -= clampedXCoord;
         double fadeX = xCoord * xCoord * xCoord * (xCoord * (xCoord * 6.0 - 15.0) + 10.0);
         for (int Z = 0; Z < sizeZ; Z++) {
@@ -475,7 +474,7 @@ static inline void generateFixedPermutations(double **buffer, double x, double z
             if (zCoord < (double) clampedZCoord) {
                 clampedZCoord--;
             }
-            auto zBottoms = (int32_t) ((uint32_t) clampedZCoord & 0xffu);
+            auto zBottoms = (int32_t)((uint32_t) clampedZCoord & 0xffu);
             zCoord -= clampedZCoord;
             double fadeZ = zCoord * zCoord * zCoord * (zCoord * (zCoord * 6.0 - 15.0) + 10.0);
             int hashXZ = permutations[permutations[xBottoms]] + zBottoms;
@@ -506,7 +505,7 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
         if (xCoord < (double) clampedXcoord) {
             clampedXcoord--;
         }
-        auto xBottoms = (uint8_t) ((uint32_t) clampedXcoord & 0xffu);
+        auto xBottoms = (uint8_t)((uint32_t) clampedXcoord & 0xffu);
         xCoord -= clampedXcoord;
         t = xCoord * 6 - 15;
         w = (xCoord * t + 10);
@@ -517,7 +516,7 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
             if (zCoord < (double) clampedZCoord) {
                 clampedZCoord--;
             }
-            auto zBottoms = (uint8_t) ((uint32_t) clampedZCoord & 0xffu);
+            auto zBottoms = (uint8_t)((uint32_t) clampedZCoord & 0xffu);
             zCoord -= clampedZCoord;
             t = zCoord * 6 - 15;
             w = (zCoord * t + 10);
@@ -528,7 +527,7 @@ static inline void generateNormalPermutations(double **buffer, double x, double 
                 if (yCoords < (double) clampedYCoords) {
                     clampedYCoords--;
                 }
-                auto yBottoms = (uint8_t) ((uint32_t) clampedYCoords & 0xffu);
+                auto yBottoms = (uint8_t)((uint32_t) clampedYCoords & 0xffu);
                 yCoords -= clampedYCoords;
                 t = yCoords * 6 - 15;
                 w = yCoords * t + 10;
@@ -725,16 +724,13 @@ static inline void generateTerrain(int chunkX, int chunkZ, uint8_t **chunkCache,
 
 
 static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunkCache, Random *worldRandom, TerrainNoises terrainNoises, uint8_t **chunkHeights) {
-    uint8_t oceanLevel = 64;
-    uint8_t MIN = oceanLevel;
-    double noiseFactor = 0.03125;
     auto *sandFields = new double[16 * 16];
     auto *gravelField = new double[16 * 16];
     auto *heightField = new double[16 * 16];
     //generateNoise(sandFields, chunkX * 16, chunkZ * 16, 0.0, 16, 16, 1, noiseFactor, noiseFactor, 1.0, terrainNoises.shoresBottomComposition, 4, 1);
     // beware this error in alpha ;)
     //generateFixedNoise(gravelField, chunkZ * 16, chunkX * 16, 16, 16, noiseFactor, noiseFactor, terrainNoises.shoresBottomComposition, 4);
-    generateNoise(heightField, chunkX * 16, chunkZ * 16, 0.0, 16, 16, 1, noiseFactor * 2.0, noiseFactor * 2.0, noiseFactor * 2.0, terrainNoises.surfaceElevation, 4, 1);
+    generateNoise(heightField, chunkX * 16, chunkZ * 16, 0.0, 16, 16, 1, 0.03125 * 2.0, 0.03125 * 2.0, 0.03125 * 2.0, terrainNoises.surfaceElevation, 4, 1);
 
     for (int x = 0; x < 16; x++) {
         for (int k = 0; k < 12; k++) {
@@ -752,7 +748,7 @@ static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunk
             int state = -1;
             uint8_t aboveOceanAkaLand = GRASS;
             uint8_t belowOceanAkaEarthCrust = DIRT;
-            for (int y = 85; y >= 70; y--) {
+            for (int y = 80; y >= 70; y--) {
                 int chunkCachePos = (x * 16 + z) * 128 + y;
                 uint8_t previousBlock = (*chunkCache)[chunkCachePos];
                 if (previousBlock == AIR) {
@@ -760,16 +756,17 @@ static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunk
                     continue;
                 }
                 if (previousBlock != STONE) {
-                    std::cout<<11111<<" "<<y<<" "<<x<<" "<<z<<std::endl;
                     continue;
                 }
                 if (state == -1) { // AIR
                     if (elevation <= 0) { // if in a deep
                         aboveOceanAkaLand = AIR;
                         belowOceanAkaEarthCrust = STONE;
+                        // TODO remove that check to not pass the test and run in prod
+                        (*chunkHeights)[x * 4 + (z - OFFSET)] = y;
                         break;
-                    }else{
-                        (*chunkHeights)[x * 16 + z] = y+1;
+                    } else {
+                        (*chunkHeights)[x * 4 + (z - OFFSET)] = y + 1;
                         break;
                     }
                     state = elevation;
@@ -780,8 +777,8 @@ static inline void replaceBlockForBiomes(int chunkX, int chunkZ, uint8_t **chunk
                 if (state > 0) {
                     state--;
                     (*chunkCache)[chunkCachePos] = belowOceanAkaEarthCrust;
-                }
 
+                }
             }
             // could be just advanced but i am afraid of nextInt
             for (int k = 0; k < 128; k++) {
@@ -804,10 +801,15 @@ static inline TerrainNoises *initTerrain(uint64_t worldSeed) {
     octaves = terrainNoises->maxLimit;
     initOctaves(octaves, &worldRandom, 16);
     octaves = terrainNoises->mainLimit;
-    // could be just advanced but i am afraid of nextInt
     initOctaves(octaves, &worldRandom, 8);
-    octaves = terrainNoises->shoresBottomComposition;
-    initOctaves(octaves, &worldRandom, 4);
+    for (int j = 0; j < 4; j++) { //shore and river composition
+        advance6(&worldRandom);
+        // could be just advanced but i am afraid of nextInt
+        uint8_t i = 0;
+        do {
+            random_next_int(&worldRandom, 256u - i);
+        } while (i++ != 255);
+    }
     octaves = terrainNoises->surfaceElevation;
     initOctaves(octaves, &worldRandom, 4);
     octaves = terrainNoises->scale;
@@ -818,18 +820,17 @@ static inline TerrainNoises *initTerrain(uint64_t worldSeed) {
 }
 
 static inline uint8_t *provideChunk(int chunkX, int chunkZ, BiomeResult *biomeResult, TerrainNoises *terrainNoises) {
-    Random worldRandom = get_random((uint64_t) ((long) chunkX * 0x4f9939f508L + (long) chunkZ * 0x1ef1565bd5L));
+    Random worldRandom = get_random((uint64_t)((long) chunkX * 0x4f9939f508L + (long) chunkZ * 0x1ef1565bd5L));
     auto *chunkCache = new uint8_t[32768];
     generateTerrain(chunkX, chunkZ, &chunkCache, biomeResult->temperature, biomeResult->humidity, *terrainNoises);
-    auto *chunkHeights = new uint8_t[256];
-    memset(chunkHeights, 0, 256);
+    auto *chunkHeights = new uint8_t[64];
+    memset(chunkHeights, 0, 64);
     replaceBlockForBiomes(chunkX, chunkZ, &chunkCache, &worldRandom, *terrainNoises, &chunkHeights);
     delete[] chunkCache;
     return chunkHeights;
 }
 
 void delete_terrain_result(TerrainResult *terrainResult) {
-    delete[] terrainResult->chunkCache;
     delete[] terrainResult->chunkHeights;
     delete_biome_result(terrainResult->biomeResult);
     delete terrainResult;
@@ -846,32 +847,16 @@ uint8_t *TerrainHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ, Biom
     TerrainNoises *terrainNoises = initTerrain(worldSeed);
     auto *chunkHeights = provideChunk(chunkX, chunkZ, biomeResult, terrainNoises);
     delete[] terrainNoises;
-    auto *chunkRestrictedHeights = new uint8_t[4 * 16];
-    for (int x = 0; x < 16; ++x) {
-        for (int z = 12; z < 16; ++z) {
-            chunkRestrictedHeights[x * 4 + (z - 12)] = chunkHeights[x * 16 + z];
-        }
-    }
-    delete[] chunkHeights;
-    return chunkRestrictedHeights;
+    return chunkHeights;
 }
 
 
 TerrainResult *TerrainWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
     BiomeResult *biomeResult = BiomeWrapper(worldSeed, chunkX, chunkZ);
-    auto *chunkCache = TerrainInternalWrapper(worldSeed, chunkX, chunkZ, biomeResult);
-    auto *chunkHeights = new uint8_t[4 * 16];
-    for (int x = 0; x < 16; ++x) {
-        for (int z = 12; z < 16; ++z) {
-            // std::cout<<(int)chunkCache[x*16+z]<<" ";
-            chunkHeights[x * 4 + (z - 12)] = chunkCache[x * 16 + z];
-        }
-        // std::cout<<std::endl;
-    }
+    auto *chunkHeights = TerrainInternalWrapper(worldSeed, chunkX, chunkZ, biomeResult);
     auto *terrainResult = new TerrainResult;
     terrainResult->biomeResult = biomeResult;
     terrainResult->chunkHeights = chunkHeights;
-    terrainResult->chunkCache = chunkCache;
     return terrainResult;
 }
 
@@ -886,11 +871,9 @@ static void printHeights(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
 }
 
 
-# define OFFSET 12
-
 void filterDownSeeds(const uint64_t *worldSeeds, int32_t posX, int64_t nbSeeds) {
     uint8_t mapWat[] = {77, 78, 77, 75}; // from z 12 to z15 in chunk
-    int chunkX = (int32_t) ((posX + 16u) >> 4u) - 1;
+    int chunkX = (int32_t)((posX + 16u) >> 4u) - 1;
     int chunkZ = -3;
     for (int i = 0; i < nbSeeds; ++i) {
         int64_t seed = worldSeeds[i];
@@ -907,11 +890,11 @@ void filterDownSeeds(const uint64_t *worldSeeds, int32_t posX, int64_t nbSeeds) 
             delete_biome_result(biomeResult);
             continue;
         }
-        uint8_t *chunkCache = TerrainInternalWrapper(seed, chunkX, chunkZ, biomeResult);
+        uint8_t *chunkHeights = TerrainInternalWrapper(seed, chunkX, chunkZ, biomeResult);
         for (int x = 0; x < 16; x++) {
             bool flag = true;
             for (uint8_t z = 0; z < (16 - OFFSET); z++) {
-                if (chunkCache[x * 16 + z + OFFSET] != mapWat[z]) {
+                if (chunkHeights[x * 4 + z] != mapWat[z]) {
                     flag = false;
                     break;
                 }
@@ -921,7 +904,7 @@ void filterDownSeeds(const uint64_t *worldSeeds, int32_t posX, int64_t nbSeeds) 
                 std::cout << "Found seed: " << seed << " at x: " << posX << " and z:-30" << std::endl;
             }
         }
-        delete[] chunkCache;
+        delete[] chunkHeights;
         delete_biome_result(biomeResult);
     }
 
