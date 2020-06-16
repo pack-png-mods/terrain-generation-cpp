@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     size_t sz;
     int64_t seed;
     int64_t index = 0;
-    while (getline(file, line).good()) {
+    while (std::getline(file, line).good()) {
         errno = 0;
         try {
             seed = std::stoull(line, &sz, 10);
