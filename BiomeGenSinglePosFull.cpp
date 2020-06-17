@@ -91,7 +91,7 @@ int grad2[12][2] = {{1,  1,},
 
 
 /* simplex noise result is in buffer */
-static inline double getSimplexNoise(double chunkX, double chunkZ,double offsetX, double offsetZ, double ampFactor, uint8_t nbOctaves, Random *random) {
+static inline double getSimplexNoise(double chunkX, double chunkZ, double offsetX, double offsetZ, double ampFactor, uint8_t nbOctaves, Random *random) {
     offsetX /= 1.5;
     offsetZ /= 1.5;
     double res = 0.0;
@@ -99,7 +99,7 @@ static inline double getSimplexNoise(double chunkX, double chunkZ,double offsetX
     double octaveAmplification = 1.0;
     double xo;
     double yo;
-    uint8_t permutations[512];
+    uint8_t permutations[256];
     for (uint8_t j = 0; j < nbOctaves; ++j) {
         xo = next_double(random) * 256.0;
         yo = next_double(random) * 256.0;
@@ -117,10 +117,9 @@ static inline double getSimplexNoise(double chunkX, double chunkZ,double offsetX
                 permutations[randomIndex] ^= permutations[index];
                 permutations[index] ^= permutations[randomIndex];
             }
-            permutations[index + 256] = permutations[index];
         } while (index++ != 255);
-        double XCoords =  (double) chunkX  * offsetX * octaveAmplification + xo;
-        double ZCoords = (double)chunkZ  * offsetZ * octaveAmplification + yo;
+        double XCoords = (double) chunkX * offsetX * octaveAmplification + xo;
+        double ZCoords = (double) chunkZ * offsetZ * octaveAmplification + yo;
         // Skew the input space to determine which simplex cell we're in
         double hairyFactor = (XCoords + ZCoords) * F2;
         auto tempX = static_cast<int32_t>(XCoords + hairyFactor);
@@ -152,9 +151,9 @@ static inline double getSimplexNoise(double chunkX, double chunkZ,double offsetX
         // Work out the hashed gradient indices of the three simplex corners
         uint8_t ii = (uint32_t) xHairy & 0xffu;
         uint8_t jj = (uint32_t) zHairy & 0xffu;
-        uint8_t gi0 = permutations[ii + permutations[jj]] % 12u;
-        uint8_t gi1 = permutations[ii + offsetSecondCornerX + permutations[jj + offsetSecondCornerZ]] % 12u;
-        uint8_t gi2 = permutations[ii + 1 + permutations[jj + 1]] % 12u;
+        uint8_t gi0 = permutations[(uint16_t) (ii + permutations[jj]) & 0xffu] % 12u;
+        uint8_t gi1 = permutations[(uint16_t)(ii + offsetSecondCornerX + permutations[(uint16_t) (jj + offsetSecondCornerZ) & 0xffu])& 0xffu] % 12u;
+        uint8_t gi2 = permutations[(uint16_t)(ii + 1 + permutations[(uint16_t)(jj + 1)& 0xffu])& 0xffu] % 12u;
 
         // Calculate the contribution from the three corners
         double t0 = 0.5 - x0 * x0 - y0 * y0;
@@ -236,8 +235,14 @@ static inline void printBiomes(uint64_t worldSeed, int32_t posX, int32_t posZ, i
 }
 
 int main() {
+    Random random = get_random(123456u);
     auto start = std::chrono::high_resolution_clock::now();
-    printBiomes(51515155LU, 6 * 16, -3 * 16, 16, 16);
+
+    for (int i = 0; i < 1000; ++i) {
+        long seed = random_next_long(&random);
+        //std::cout<<seed<<std::endl;
+        printBiomes(seed, 15*16, 16*16,16,16);
+    }
     auto finish = std::chrono::high_resolution_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::nanoseconds>(finish - start).count() / 1e9 << " s\n";
 }
