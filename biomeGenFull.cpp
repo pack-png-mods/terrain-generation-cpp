@@ -155,8 +155,8 @@ static inline void getSimplexNoise(double *buffer, double chunkX, double chunkZ,
                 double y2 = (y0 - 1.0) + 2.0 * G2;
 
                 // Work out the hashed gradient indices of the three simplex corners
-                uint32_t ii = (uint32_t) xHairy & 0xffu;
-                uint32_t jj = (uint32_t) zHairy & 0xffu;
+                uint8_t ii = (uint32_t) xHairy & 0xffu;
+                uint8_t jj = (uint32_t) zHairy & 0xffu;
                 uint8_t gi0 = permutations[ii + permutations[jj]] % 12u;
                 uint8_t gi1 = permutations[ii + offsetSecondCornerX + permutations[jj + offsetSecondCornerZ]] % 12u;
                 uint8_t gi2 = permutations[ii + 1 + permutations[jj + 1]] % 12u;
@@ -199,6 +199,7 @@ static inline void getSimplexNoise(double *buffer, double chunkX, double chunkZ,
     }
 
 }
+
 /* End of simplex noise result is in buffer */
 
 
@@ -260,11 +261,13 @@ BiomeResult *BiomeWrapper(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
 }
 
 static inline void printBiomes(uint64_t worldSeed, int32_t chunkX, int32_t chunkZ) {
-    double *temp = BiomeWrapper(worldSeed, chunkX, chunkZ)->temperature;
+    BiomeResult *biomeResult = BiomeWrapper(worldSeed, chunkX, chunkZ);
+    double *temp = biomeResult->temperature;
     for (int i = 0; i < 16 * 16; ++i) {
         std::cout << temp[i] << " ";
     }
     std::cout << std::endl;
+    delete_biome_result(biomeResult);
 }
 
 int main() {
